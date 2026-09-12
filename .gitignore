@@ -1,0 +1,28 @@
+*.md
+
+# Local .terraform directory (contains downloaded plugins and modules)
+**/.terraform/*
+
+# .tfstate files contain the current state of your infrastructure, including secrets.
+# These should be stored in a remote backend (like AWS S3 or HashiCorp Cloud), never in Git.
+*.tfstate
+*.tfstate.*
+
+# Crash logs if Terraform crashes
+crash.log
+crash.*.log
+
+# Exclude all variable files as they often contain secrets like API keys and passwords
+*.tfvars
+*.tfvars.json
+
+# Exclude override files (used for local-only testing overrides)
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Include override files for ignoring CLI configuration
+.terraformrc
+terraform.rc
+
