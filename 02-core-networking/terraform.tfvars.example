@@ -1,0 +1,52 @@
+# terraform.tfvars.example
+prefix        = "tfaz02"
+location      = "eastus"
+address_space = ["10.40.0.0/16"]
+
+subnets = {
+  web = {
+    address_prefixes = ["10.40.1.0/24"]
+    allowed_inbound = [
+      {
+        name                   = "AllowHttpsFromInternet"
+        priority               = 100
+        protocol               = "Tcp"
+        source_address_prefix  = "Internet"
+        destination_port_range = "443"
+      }
+    ]
+  }
+
+  app = {
+    address_prefixes = ["10.40.2.0/24"]
+    allowed_inbound = [
+      {
+        name                   = "AllowAppFromWeb"
+        priority               = 100
+        protocol               = "Tcp"
+        source_address_prefix  = "10.40.1.0/24"
+        destination_port_range = "8080"
+      }
+    ]
+  }
+
+  data = {
+    address_prefixes = ["10.40.3.0/24"]
+    allowed_inbound = [
+      {
+        name                   = "AllowDbFromApp"
+        priority               = 100
+        protocol               = "Tcp"
+        source_address_prefix  = "10.40.2.0/24"
+        destination_port_range = "5432"
+      }
+    ]
+  }
+}
+
+enable_nat_gateway = false
+
+tags = {
+  environment = "dev"
+  managed_by  = "terraform"
+}
