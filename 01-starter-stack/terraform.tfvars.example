@@ -1,0 +1,5 @@
+# terraform.tfvars.example
+prefix      = "tfaz01"
+location    = "eastus"
+environment = "dev"
+owner       = "your-name"
