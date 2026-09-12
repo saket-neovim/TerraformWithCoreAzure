@@ -1,4 +1,6 @@
-*.md
+AzureTerraformHandsOnCurriculum.md
+HowToUseAzureTerraformLabs.md
+Tasks1.md
 
 # Local .terraform directory (contains downloaded plugins and modules)
 **/.terraform/*
