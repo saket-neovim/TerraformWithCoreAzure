@@ -414,9 +414,17 @@ Create:
 - Three subnets: `web`, `app`, and `data`.
 - One NSG per subnet.
 - NSG rules that allow only the traffic you intentionally choose.
-- One route table for controlled outbound routing.
+- One route table for outbound routing practice, not for normal subnet-to-subnet traffic inside the VNet.
 - Optional NAT Gateway with public IP for outbound egress.
 - Optional diagnostics to Log Analytics if reusing Project 1 patterns.
+
+Traffic model:
+
+```text
+Internet -> web subnet -> app subnet -> data subnet
+```
+
+Use NSG rules to decide whether `web` can reach `app` and whether `app` can reach `data`. Do not create custom route table entries for normal `web` to `app` or `app` to `data` traffic; Azure system routes already know how to route between subnets in the same VNet. Use the route table only to practice outbound routing decisions, such as internet egress or a future firewall/NVA path.
 
 ### Azure Services Practiced
 
@@ -574,7 +582,9 @@ resource "azurerm_virtual_network" "this" {
 # TODO: Create one NSG per subnet with for_each.
 # TODO: Generate inbound security rules from each subnet's allowed_inbound list.
 # TODO: Associate each NSG to the correct subnet.
-# TODO: Create route table and subnet associations.
+# TODO: Create one route table for outbound routing practice.
+# TODO: Associate it only with the subnet or subnets whose outbound path you want to control.
+# TODO: Do not add custom routes for normal web -> app or app -> data traffic inside the same VNet.
 # TODO: Optionally create public IP + NAT Gateway + subnet associations when enable_nat_gateway is true.
 ```
 
@@ -596,7 +606,7 @@ resource "azurerm_virtual_network" "this" {
 4. Implement NSGs using stable keys.
 5. Generate NSG rules from input data.
 6. Associate every subnet with exactly one NSG.
-7. Add a route table and explain what route it contains.
+7. Add a route table for outbound routing practice and explain what outbound path it controls.
 8. Decide whether to enable NAT Gateway. If skipping it, document the cost reason.
 9. Run `terraform plan` and predict resource creation order.
 10. Apply and inspect the VNet, subnets, NSGs, and routes using Azure CLI.
@@ -642,7 +652,8 @@ Choose one break/fix scenario:
 7. What does NAT Gateway solve?
 8. How would you troubleshoot a VM that cannot reach the internet?
 9. How would you validate effective security rules in Azure?
-10. What parts of this design would change for production?
+10. Why does normal subnet-to-subnet traffic inside one VNet not need a custom route?
+11. What parts of this design would change for production?
 
 ### Decision Note
 
