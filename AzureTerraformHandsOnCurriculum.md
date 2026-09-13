@@ -1024,3 +1024,382 @@ After the 8 projects:
 4. AKS labs should cover cluster creation, node pools, networking, identity, ingress, monitoring, upgrades, and troubleshooting.
 
 Do not rush to AKS before you can confidently explain Azure networking, identity, monitoring, and Terraform state.
+
+## Detailed Project 3 - Terraform State And Refactor Workflow
+
+**Difficulty:** Intermediate to Advanced  
+**Estimated time:** 8-12 hours  
+**Cost:** Low. Uses Azure Storage for backend state plus a small imported resource group and simple resources. Destroy lab resources after validation, but decide whether to keep or delete the backend storage.
+
+### Scenario
+
+Your team is moving from solo Terraform practice to team-style Terraform operations. Local state is no longer enough. You need to create a remote backend, migrate workload state to Azure Storage, import a manually created Azure resource group, and safely refactor Terraform resource addresses without recreating real infrastructure.
+
+This project is less about creating many Azure resources and more about learning the workflows that protect production infrastructure.
+
+### Architecture Target
+
+Create or manage:
+
+- One backend resource group.
+- One backend storage account.
+- One backend blob container named `tfstate`.
+- One manually created/imported workload resource group.
+- One Terraform-managed storage account inside the imported resource group.
+- One Terraform-managed blob container.
+- A refactor from rough Terraform resource addresses to better names using `moved` blocks.
+
+### Azure Services Practiced
+
+- Resource groups
+- Storage accounts
+- Blob containers
+- Azure Storage backend for Terraform state
+- Azure CLI resource inspection
+
+### Terraform Skills Practiced
+
+- Local state vs remote state
+- Backend bootstrapping
+- `terraform init -migrate-state`
+- Backend configuration limitations
+- `terraform import`
+- Terraform resource addresses
+- State inspection
+- Safe refactoring with `moved` blocks
+- Drift inspection with refresh-only plans
+
+### Starting Repository Shape
+
+```text
+03-state-refactor-workflow/
+├── README.md
+├── bootstrap-backend/
+│   ├── versions.tf
+│   ├── providers.tf
+│   ├── variables.tf
+│   ├── main.tf
+│   ├── outputs.tf
+│   └── terraform.tfvars.example
+└── workload/
+    ├── versions.tf
+    ├── backend.tf
+    ├── providers.tf
+    ├── variables.tf
+    ├── main.tf
+    ├── moved.tf
+    ├── outputs.tf
+    ├── terraform.tfvars.example
+    ├── notes.md
+    └── evidence.md
+```
+
+Use `bootstrap-backend` to create the remote state storage. Use `workload` for the imported resource group and refactor workflow.
+
+### Part A - Bootstrap The Backend
+
+In `bootstrap-backend`, create:
+
+- Resource group: `<prefix>-backend-rg`
+- Storage account: globally unique, Azure-valid name
+- Blob container: `tfstate`
+- Tags:
+  - `environment`
+  - `managed_by = terraform`
+  - `project = azure-terraform-hands-on`
+  - `purpose = terraform-state`
+
+Use local state for this bootstrap project.
+
+Before coding, write this prediction in `workload/notes.md`:
+
+```text
+Backend prediction:
+
+Why does the backend need to exist before workload init?
+
+Which values are needed in backend.tf?
+
+Which backend values are globally unique?
+
+Should backend resources be destroyed after the lab?
+```
+
+### Part B - Configure Remote State
+
+In `workload/backend.tf`, configure the AzureRM backend manually.
+
+Example shape:
+
+```hcl
+terraform {
+  backend "azurerm" {
+    resource_group_name  = "..."
+    storage_account_name = "..."
+    container_name       = "tfstate"
+    key                  = "03-state-refactor-workflow.tfstate"
+  }
+}
+```
+
+Backend blocks cannot use normal Terraform variables. Fill in the backend values directly or use backend config during `terraform init`.
+
+Run:
+
+```bash
+terraform init
+terraform providers
+```
+
+Record in `evidence.md`:
+
+```text
+Remote backend initialized:
+Backend resource group:
+Backend storage account:
+Backend container:
+State key:
+```
+
+### Part C - Import An Existing Resource Group
+
+Create a workload resource group manually with Azure CLI:
+
+```bash
+az group create \
+  --name <prefix>-imported-rg \
+  --location eastus \
+  --tags environment=dev managed_by=manual project=azure-terraform-hands-on
+```
+
+In `workload/main.tf`, define the matching Terraform resource:
+
+```hcl
+resource "azurerm_resource_group" "imported" {
+  name     = var.imported_resource_group_name
+  location = var.location
+  tags     = local.common_tags
+}
+```
+
+Then import it:
+
+```bash
+terraform import azurerm_resource_group.imported /subscriptions/<subscription-id>/resourceGroups/<prefix>-imported-rg
+```
+
+After import, run:
+
+```bash
+terraform state list
+terraform state show azurerm_resource_group.imported
+terraform plan
+```
+
+Your goal is to make the plan clean or explain exactly why Terraform wants to update tags.
+
+### Part D - Add A Small Managed Workload
+
+Inside the imported resource group, add:
+
+- One storage account.
+- One private blob container named `artifacts`.
+- Outputs for:
+  - imported resource group name
+  - storage account name
+  - storage account ID
+  - backend state key
+
+Use names that make the first version intentionally a little rough, for example:
+
+```hcl
+resource "azurerm_storage_account" "this" {
+  # Implement this yourself.
+}
+```
+
+Apply successfully.
+
+Then inspect:
+
+```bash
+terraform output
+terraform state list
+az resource list --resource-group <prefix>-imported-rg --output table
+```
+
+### Part E - Safe Refactor With `moved`
+
+Refactor Terraform resource addresses without replacing Azure resources.
+
+Rename Terraform addresses like this:
+
+```text
+azurerm_resource_group.imported -> azurerm_resource_group.workload
+azurerm_storage_account.this    -> azurerm_storage_account.artifacts
+azurerm_storage_container.this  -> azurerm_storage_container.artifacts
+```
+
+Add `moved` blocks in `moved.tf`.
+
+Then run:
+
+```bash
+terraform fmt -check -recursive
+terraform validate
+terraform plan
+terraform state list
+```
+
+Expected result: Terraform should understand the address move and should not destroy or recreate resources just because Terraform labels changed.
+
+### Tasks
+
+1. Create the `03-state-refactor-workflow` folder structure.
+2. Build and apply the backend storage resources from `bootstrap-backend`.
+3. Configure the `workload` root module to use the AzureRM backend.
+4. Initialize the workload backend.
+5. Manually create the workload resource group with Azure CLI.
+6. Write matching Terraform configuration for the manually created resource group.
+7. Import the resource group into Terraform state.
+8. Run `terraform plan` and reconcile or explain tag drift.
+9. Add a Terraform-managed storage account and private blob container.
+10. Apply and validate the workload resources.
+11. Rename rough Terraform addresses to clearer names.
+12. Add `moved` blocks and prove the refactor does not recreate resources.
+13. Run the troubleshooting exercise.
+14. Write the final decision note.
+15. Destroy workload resources when finished.
+16. Decide whether to keep or destroy the backend resources.
+
+### Validation Commands
+
+Backend:
+
+```bash
+terraform init
+terraform fmt -check -recursive
+terraform validate
+terraform plan -out=tfplan
+terraform show tfplan
+terraform apply tfplan
+terraform output
+```
+
+Workload:
+
+```bash
+terraform init
+terraform fmt -check -recursive
+terraform validate
+terraform import azurerm_resource_group.imported /subscriptions/<subscription-id>/resourceGroups/<prefix>-imported-rg
+terraform state list
+terraform state show azurerm_resource_group.imported
+terraform plan -out=tfplan
+terraform show tfplan
+terraform apply tfplan
+terraform output
+terraform plan -refresh-only
+terraform plan
+```
+
+Azure CLI:
+
+```bash
+az group show --name <prefix>-imported-rg
+az resource list --resource-group <prefix>-imported-rg --output table
+az storage blob list \
+  --account-name <backend-storage-account> \
+  --container-name tfstate \
+  --output table
+```
+
+### Troubleshooting Exercise
+
+Choose one:
+
+- Remove one `moved` block and observe the plan.
+- Change the actual storage account name and observe replacement behavior.
+- Manually edit a tag in Azure and compare `terraform plan -refresh-only` with normal `terraform plan`.
+- Try importing the resource group to the wrong Terraform address, then fix the state safely.
+
+Answer in `notes.md`:
+
+```text
+What I broke:
+
+Where Terraform detected it:
+
+Was this a config issue, state issue, Azure issue, or drift?
+
+How I fixed it:
+
+What would be risky in production:
+```
+
+### Interview Questions
+
+1. Why does Terraform state need to be protected?
+2. What is the difference between local state and remote state?
+3. Why can normal Terraform variables not be used inside a backend block?
+4. What does `terraform init -migrate-state` do?
+5. What does `terraform import` do and what does it not do?
+6. Why can an imported resource still show changes in `terraform plan`?
+7. What is the difference between renaming a Terraform resource address and renaming the Azure resource itself?
+8. What problem do `moved` blocks solve?
+9. When would `terraform state mv` be useful, and why should it be used carefully?
+10. What should you check before applying a plan that shows destroy/create after a refactor?
+
+### Decision Note
+
+Write a short note in `notes.md`:
+
+```text
+Decision:
+
+Where should Terraform state live for team use?
+
+Who should have access to the backend storage account?
+
+When should resources be imported instead of recreated?
+
+When should moved blocks be used?
+
+What I would change before production:
+```
+
+### Cleanup
+
+Destroy workload resources first:
+
+```bash
+cd workload
+terraform destroy
+az resource list --resource-group <prefix>-imported-rg --output table
+```
+
+If the imported resource group remains because it was created outside Terraform or because you intentionally kept it, document why.
+
+Then decide whether to keep or destroy backend resources:
+
+```bash
+cd ../bootstrap-backend
+terraform destroy
+```
+
+Do not destroy the backend until you are sure you no longer need the workload state file.
+
+### Grading Rubric
+
+| Area | Strong evidence |
+|---|---|
+| Backend understanding | You can explain why backend storage must exist before workload initialization |
+| State safety | Remote state is used and validated in Azure Storage |
+| Import workflow | Imported resource group maps cleanly to Terraform configuration |
+| Refactor safety | `moved` blocks prevent unwanted destroy/create during address renames |
+| Drift understanding | You can explain refresh-only vs normal plan after manual Azure changes |
+| Production judgment | You can explain access control, state sensitivity, and cleanup decisions |
+
+### Hidden Solution Policy
+
+Do not ask for the full solution first. Build the files yourself. Ask for conceptual hints, review, or grading when stuck.
