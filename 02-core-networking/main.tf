@@ -39,7 +39,7 @@ resource "azurerm_network_security_group" "this" {
       source_address_prefix      = security_rule.value.source_address_prefix
       destination_port_range     = security_rule.value.destination_port_range
       destination_address_prefix = security_rule.value.destination_address_prefix
-      access                     = "Allow"
+      access                     = security_rule.value.access
       direction                  = "Inbound"
     }
   }

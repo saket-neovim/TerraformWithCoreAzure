@@ -24,6 +24,7 @@ variable "subnets" {
       source_address_prefix      = string
       destination_port_range     = string
       destination_address_prefix = optional(string, "*")
+      access                     = optional(string, "Allow")
     }))
   }))
 }
