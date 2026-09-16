@@ -742,40 +742,501 @@ After Projects 1-2, generate this project in full detail using your actual pain 
 
 **Difficulty:** Advanced  
 **Estimated time:** 10-16 hours  
-**Cost:** Low to moderate.
+**Cost:** Low to moderate. VNets, NSGs, resource groups, and Log Analytics are low cost, but diagnostics can create ingestion charges. Destroy after validation.
 
 ### Scenario
 
-You need to turn repeated Terraform into reusable modules without hiding important Azure decisions.
+Your team has repeated the same Terraform patterns across multiple labs: resource groups, names, tags, VNets, subnets, NSGs, and optional diagnostics. The next step is to turn those patterns into reusable modules while keeping important Azure design choices visible at the environment layer.
+
+The goal is not to hide complexity. The goal is to create modules with clear inputs, stable outputs, validation, and predictable behavior across `dev` and `test`.
 
 ### Architecture Target
 
-- Foundation module for resource group, names, and tags.
-- Network module for VNet, subnets, NSGs, and outputs.
-- Optional diagnostics module.
-- Environment folders for `dev` and `test`.
+Create:
+
+- A `foundation` module for the resource group, standardized name prefix, and common tags.
+- A `network` module for one VNet, multiple subnets, one NSG per subnet, and NSG associations.
+- An optional `diagnostics` module for Log Analytics and diagnostic settings where supported.
+- Two environment roots: `dev` and `test`.
+- Environment-specific variable files so `dev` and `test` use the same modules with different inputs.
+- Stable outputs keyed by logical names, such as subnet name and NSG name.
+
+Module dependency rule:
+
+```text
+env root -> foundation module
+env root -> network module
+env root -> diagnostics module
+```
+
+Modules must not reach into each other directly. Pass values through the environment root module.
+
+### Azure Services Practiced
+
+- Resource groups
+- Virtual Networks
+- Subnets
+- Network Security Groups
+- NSG security rules
+- Log Analytics workspace
+- Azure Monitor diagnostic settings
+- Tags
+
+### Terraform Skills Practiced
+
+- Local modules
+- Module inputs and outputs
+- Input validation
+- `for_each` with stable keys
+- Maps and objects
+- Optional module creation with `count`
+- Environment-specific `.tfvars`
+- Stable output contracts
+- Refactoring repeated code into modules
+
+### Starting Repository Shape
+
+```text
+04-reusable-platform-modules/
+├── README.md
+├── notes.md
+├── modules/
+│   ├── foundation/
+│   │   ├── variables.tf
+│   │   ├── main.tf
+│   │   └── outputs.tf
+│   ├── network/
+│   │   ├── variables.tf
+│   │   ├── main.tf
+│   │   └── outputs.tf
+│   └── diagnostics/
+│       ├── variables.tf
+│       ├── main.tf
+│       └── outputs.tf
+└── envs/
+    ├── dev/
+    │   ├── versions.tf
+    │   ├── providers.tf
+    │   ├── variables.tf
+    │   ├── main.tf
+    │   ├── outputs.tf
+    │   └── terraform.tfvars.example
+    └── test/
+        ├── versions.tf
+        ├── providers.tf
+        ├── variables.tf
+        ├── main.tf
+        ├── outputs.tf
+        └── terraform.tfvars.example
+```
+
+### Starter Code
+
+Create the files yourself from this starter. Some pieces are intentionally incomplete.
+
+```hcl
+# envs/dev/versions.tf and envs/test/versions.tf
+terraform {
+  required_version = ">= 1.6"
+
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 3.0"
+    }
+  }
+}
+```
+
+```hcl
+# envs/dev/providers.tf and envs/test/providers.tf
+provider "azurerm" {
+  features {}
+}
+```
+
+```hcl
+# modules/foundation/variables.tf
+variable "prefix" {
+  description = "Short lowercase prefix used in resource names."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9]{2,10}$", var.prefix))
+    error_message = "Use 3-11 lowercase letters or numbers, starting with a letter."
+  }
+}
+
+variable "environment" {
+  description = "Environment name."
+  type        = string
+
+  validation {
+    condition     = contains(["dev", "test"], var.environment)
+    error_message = "Environment must be dev or test for this lab."
+  }
+}
+
+variable "location" {
+  description = "Azure region."
+  type        = string
+}
+
+variable "owner" {
+  description = "Owner tag value."
+  type        = string
+}
+
+variable "extra_tags" {
+  description = "Additional tags merged into common tags."
+  type        = map(string)
+  default     = {}
+}
+```
+
+```hcl
+# modules/foundation/main.tf
+locals {
+  name_prefix = "${var.prefix}-${var.environment}"
+
+  common_tags = merge(
+    {
+      environment = var.environment
+      owner       = var.owner
+      managed_by  = "terraform"
+      project     = "azure-terraform-hands-on"
+    },
+    var.extra_tags
+  )
+}
+
+resource "azurerm_resource_group" "this" {
+  name     = "${local.name_prefix}-rg"
+  location = var.location
+  tags     = local.common_tags
+}
+```
+
+```hcl
+# modules/foundation/outputs.tf
+# TODO: Output:
+# - resource group name
+# - resource group ID
+# - location
+# - name prefix
+# - common tags
+```
+
+```hcl
+# modules/network/variables.tf
+variable "name_prefix" {
+  type = string
+}
+
+variable "resource_group_name" {
+  type = string
+}
+
+variable "location" {
+  type = string
+}
+
+variable "address_space" {
+  type = list(string)
+
+  validation {
+    condition     = length(var.address_space) > 0
+    error_message = "Provide at least one VNet address space."
+  }
+}
+
+variable "subnets" {
+  description = "Subnet definitions keyed by subnet name."
+  type = map(object({
+    address_prefixes = list(string)
+    inbound_rules = optional(list(object({
+      name                       = string
+      priority                   = number
+      protocol                   = string
+      source_address_prefix      = string
+      destination_port_range     = string
+      destination_address_prefix = optional(string, "*")
+      access                     = optional(string, "Allow")
+    })), [])
+  }))
+}
+
+variable "tags" {
+  type    = map(string)
+  default = {}
+}
+```
+
+```hcl
+# modules/network/main.tf
+resource "azurerm_virtual_network" "this" {
+  name                = "${var.name_prefix}-vnet"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  address_space       = var.address_space
+  tags                = var.tags
+}
+
+# TODO: Create subnets with for_each.
+# TODO: Create one NSG per subnet with for_each.
+# TODO: Generate inbound security rules from each subnet's inbound_rules list.
+# TODO: Associate each subnet with its matching NSG.
+# TODO: Keep resource addresses stable when new subnet keys are added.
+```
+
+```hcl
+# modules/network/outputs.tf
+# TODO: Output:
+# - VNet name
+# - VNet ID
+# - subnet IDs as a map keyed by subnet name
+# - NSG IDs as a map keyed by subnet name
+```
+
+```hcl
+# modules/diagnostics/variables.tf
+variable "name_prefix" {
+  type = string
+}
+
+variable "resource_group_name" {
+  type = string
+}
+
+variable "location" {
+  type = string
+}
+
+variable "retention_in_days" {
+  type    = number
+  default = 30
+
+  validation {
+    condition     = var.retention_in_days >= 30 && var.retention_in_days <= 730
+    error_message = "Retention must be between 30 and 730 days."
+  }
+}
+
+variable "diagnostic_targets" {
+  description = "Map of diagnostic target name to Azure resource ID."
+  type        = map(string)
+  default     = {}
+}
+
+variable "tags" {
+  type    = map(string)
+  default = {}
+}
+```
+
+```hcl
+# modules/diagnostics/main.tf
+resource "azurerm_log_analytics_workspace" "this" {
+  name                = "${var.name_prefix}-law"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  sku                 = "PerGB2018"
+  retention_in_days   = var.retention_in_days
+  tags                = var.tags
+}
+
+# TODO: Add diagnostic settings only for resource types you verify support
+# the chosen log and metric categories.
+```
+
+```hcl
+# envs/dev/main.tf
+module "foundation" {
+  source = "../../modules/foundation"
+
+  prefix      = var.prefix
+  environment = "dev"
+  location    = var.location
+  owner       = var.owner
+}
+
+module "network" {
+  source = "../../modules/network"
+
+  name_prefix         = module.foundation.name_prefix
+  resource_group_name = module.foundation.resource_group_name
+  location            = module.foundation.location
+  address_space       = var.address_space
+  subnets             = var.subnets
+  tags                = module.foundation.tags
+}
+
+# TODO: Optionally call diagnostics with count when enable_diagnostics is true.
+```
+
+```hcl
+# envs/dev/terraform.tfvars.example
+prefix        = "tfaz04"
+location      = "eastus"
+owner         = "your-name"
+address_space = ["10.44.0.0/16"]
+
+subnets = {
+  web = {
+    address_prefixes = ["10.44.1.0/24"]
+    inbound_rules = [
+      {
+        name                   = "AllowHttpsFromInternet"
+        priority               = 100
+        protocol               = "Tcp"
+        source_address_prefix  = "Internet"
+        destination_port_range = "443"
+      }
+    ]
+  }
+
+  app = {
+    address_prefixes = ["10.44.2.0/24"]
+    inbound_rules = [
+      {
+        name                   = "AllowAppFromWeb"
+        priority               = 100
+        protocol               = "Tcp"
+        source_address_prefix  = "10.44.1.0/24"
+        destination_port_range = "8080"
+      }
+    ]
+  }
+}
+
+enable_diagnostics = true
+```
+
+Create `envs/test` with the same root module shape, but use `environment = "test"`, a different address space such as `10.45.0.0/16`, and at least one additional subnet such as `data`.
 
 ### Core Tasks
 
-- Design module inputs and outputs.
-- Add input validation.
-- Keep outputs stable and keyed by names.
-- Avoid modules reaching into each other directly.
-- Use environment-specific variable files.
-- Document module usage and limitations.
+1. Design the `foundation`, `network`, and `diagnostics` module APIs before writing resources.
+2. Implement the foundation module and confirm outputs can be consumed by the root module.
+3. Implement the network module using `for_each` for subnets and NSGs.
+4. Generate NSG rules from subnet input data.
+5. Add validation for prefix, environment, address space, and diagnostics retention.
+6. Create `dev` and `test` environment roots using the same modules.
+7. Keep all environment-specific CIDRs and NSG rules in `.tfvars` files.
+8. Add the optional diagnostics module and enable it in `dev`.
+9. Keep diagnostics disabled in `test` first, then enable it and compare the plan.
+10. Add a new subnet to `test` and confirm existing subnet addresses are not replaced.
+11. Rename a subnet key and explain the destroy/create behavior.
+12. Document module limitations and production changes in `notes.md`.
 
-### Services Covered
+### Validation Commands
 
-- Resource groups
-- VNets
-- Subnets
-- NSGs
-- Log Analytics
-- Diagnostic settings
+Run from `envs/dev`, then repeat from `envs/test`:
 
-### Generate Later
+```bash
+terraform init
+terraform fmt -check -recursive ../..
+terraform validate
+terraform plan -out=tfplan
+terraform show tfplan
+terraform apply tfplan
+terraform output
+terraform state list
+terraform state show module.foundation.azurerm_resource_group.this
+az group show --name <resource-group-name>
+az network vnet show --name <vnet-name> --resource-group <resource-group-name>
+az network vnet subnet list --vnet-name <vnet-name> --resource-group <resource-group-name> --output table
+az network nsg list --resource-group <resource-group-name> --output table
+az monitor log-analytics workspace list --resource-group <resource-group-name> --output table
+terraform destroy
+```
 
-Generate this project after reviewing whether Projects 1-3 show enough comfort with locals, variables, and state.
+### Troubleshooting Exercise
+
+Choose two break/fix scenarios:
+
+- Remove one required module output and observe how the root module fails.
+- Pass a subnet map with duplicate NSG rule priorities and explain the Azure or provider error.
+- Rename a subnet key and explain why Terraform plans a replacement.
+- Enable diagnostics for a resource with unsupported categories and diagnose the failure.
+- Change the module source path to a wrong relative path and explain the init error.
+
+Then answer:
+
+- Did the failure happen during init, validate, plan, or apply?
+- Was the problem in module wiring, Terraform type validation, Azure rules, or provider behavior?
+- What would make the module safer for other teams?
+
+### Interview Questions
+
+1. When should Terraform code become a module?
+2. What should a module output, and what should it hide?
+3. Why should outputs be keyed by stable names instead of list indexes?
+4. What is the risk of putting too much logic inside a module?
+5. How do root modules and child modules differ?
+6. Why should modules not reach into each other directly?
+7. How does `for_each` behave when a map key is renamed?
+8. How do `.tfvars` files help separate environment configuration from reusable logic?
+9. What makes a module interface hard to change later?
+10. How would you version a module in a real team?
+11. What diagnostics would you enable in production, and why?
+12. What cost risks come with Log Analytics?
+
+### Decision Note
+
+Write a short note in `notes.md`:
+
+```text
+Module boundaries:
+
+Values owned by foundation:
+
+Values owned by network:
+
+Values kept in environment roots:
+
+Diagnostics decision:
+
+What would change before production:
+```
+
+### Cleanup
+
+Destroy both environments:
+
+```bash
+cd envs/dev
+terraform destroy
+
+cd ../test
+terraform destroy
+```
+
+Then verify no resources remain:
+
+```bash
+az group show --name <dev-resource-group-name>
+az group show --name <test-resource-group-name>
+```
+
+If either resource group still exists, list remaining resources before manual cleanup.
+
+### Grading Rubric
+
+| Area | Strong evidence |
+|---|---|
+| Module design | Inputs are explicit, outputs are stable, and modules have clear ownership |
+| Terraform modeling | Subnets and NSGs use `for_each` with stable keys |
+| Environment separation | Dev and test differ through variables, not copied module logic |
+| Validation | Bad inputs fail early with useful validation messages |
+| Azure understanding | You can explain VNet, subnet, NSG, and diagnostics choices |
+| Refactor safety | Adding keys does not replace unrelated resources |
+| Cost control | Diagnostics and Log Analytics choices are intentional |
+| Documentation | `notes.md` explains module limitations and production changes |
+
+### Hidden Solution Policy
+
+Do not ask for a full solution first. Ask for hints, review, or grading before asking for the complete answer.
 
 ## Project 5 - Identity, RBAC, and Key Vault Project
 
