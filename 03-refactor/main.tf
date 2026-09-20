@@ -113,7 +113,7 @@ resource "azurerm_network_security_group" "vm" {
     protocol                   = "Tcp"
     source_port_range          = "*"
     destination_port_range     = "22"
-    source_address_prefix      = "223.185.132.228/32"
+    source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
 }
@@ -124,7 +124,7 @@ resource "azurerm_network_interface_security_group_association" "this" {
 }
 
 resource "azurerm_storage_account" "main" {
-  name                     = "dummyac11212"
+  name                     = "dummyac12871829"
   resource_group_name      = "tfaz02-network-rg"
   location                 = "East US"
   account_tier             = "Standard"
@@ -133,5 +133,5 @@ resource "azurerm_storage_account" "main" {
 
 moved {
   from = azurerm_storage_account.new_import
-  to = azurerm_storage_account.main
+  to   = azurerm_storage_account.main
 }
