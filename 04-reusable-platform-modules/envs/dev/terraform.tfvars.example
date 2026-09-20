@@ -1,0 +1,35 @@
+prefix        = "tfaz04"
+location      = "eastus"
+owner         = "your-name"
+address_space = ["10.44.0.0/16"]
+
+subnets = {
+  web = {
+    address_prefixes = ["10.44.1.0/24"]
+    inbound_rules = [
+      {
+        name                   = "AllowHttpsFromInternet"
+        priority               = 100
+        protocol               = "Tcp"
+        source_address_prefix  = "Internet"
+        destination_port_range = "443"
+      }
+    ]
+  }
+
+  app = {
+    address_prefixes = ["10.44.2.0/24"]
+    inbound_rules = [
+      {
+        name                   = "AllowAppFromWeb"
+        priority               = 100
+        protocol               = "Tcp"
+        source_address_prefix  = "10.44.1.0/24"
+        destination_port_range = "8080"
+      }
+    ]
+  }
+}
+
+enable_diagnostics = true
+
