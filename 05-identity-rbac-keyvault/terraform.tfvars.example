@@ -1,0 +1,8 @@
+prefix           = "tfaz05"
+location         = "eastus"
+environment      = "dev"
+owner            = "your-name"
+lab_secret_value = "example-lab-secret-do-not-use-real-secrets"
+
+enable_diagnostics = true
+

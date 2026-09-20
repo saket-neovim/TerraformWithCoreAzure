@@ -1242,40 +1242,425 @@ Do not ask for a full solution first. Ask for hints, review, or grading before a
 
 **Difficulty:** Advanced  
 **Estimated time:** 8-14 hours  
-**Cost:** Low.
+**Cost:** Low. Key Vault, managed identity, role assignments, storage, and Log Analytics are low cost, but diagnostics can create ingestion charges. Destroy after validation.
 
 ### Scenario
 
-An application identity needs least-privilege access to secrets and storage. Access is failing intermittently because the team does not understand managed identities, RBAC scopes, or propagation delay.
+A workload team is preparing to deploy an application. The application needs an identity that can read secrets from Key Vault and read blobs from a storage account. The team has been assigning broad roles at resource group scope because access failures are hard to diagnose and RBAC propagation is confusing.
+
+Your job is to build a small identity and secrets foundation with Terraform, prove the role assignments exist at the correct scopes, and explain what Terraform state does and does not safely protect.
 
 ### Architecture Target
 
-- User-assigned managed identity.
-- Key Vault using RBAC authorization.
-- One or more secrets.
-- Storage account access through scoped role assignment.
-- Diagnostic settings for Key Vault.
+Create:
+
+- One resource group.
+- One user-assigned managed identity for a future application.
+- One storage account and one private blob container.
+- One Key Vault using Azure RBAC authorization, not the legacy access policy model.
+- One lab secret in Key Vault.
+- A documented permission path for the Terraform-running identity to create the lab secret.
+- A role assignment that lets the managed identity read Key Vault secrets.
+- A role assignment that lets the managed identity read blobs from the storage account or container.
+- Optional Log Analytics workspace.
+- Diagnostic settings for Key Vault when diagnostics are enabled.
+
+Important boundary:
+
+```text
+Terraform creates the identity and assignments.
+Lab 6 will attach an identity to compute and test runtime access from an application host.
+```
+
+In this lab, you validate the RBAC model, scopes, and Azure resources. You do not need to build a VM or app just to use the managed identity.
+
+### Azure Services Practiced
+
+- Microsoft Entra ID managed identities
+- Azure RBAC role assignments
+- Key Vault with RBAC authorization
+- Key Vault secrets
+- Storage accounts
+- Blob containers
+- Log Analytics workspace
+- Azure Monitor diagnostic settings
+
+### Terraform Skills Practiced
+
+- Identity resources and `principal_id`
+- Role assignment scopes
+- Data sources such as `azurerm_client_config`
+- Sensitive variables and sensitive outputs
+- Understanding secret values in Terraform state
+- Dependency timing and RBAC propagation
+- Optional resources with `count`
+- Validation for Azure naming constraints
+
+### Starting Repository Shape
+
+```text
+05-identity-rbac-keyvault/
+├── README.md
+├── versions.tf
+├── providers.tf
+├── variables.tf
+├── main.tf
+├── outputs.tf
+├── terraform.tfvars.example
+├── notes.md
+└── evidence.md
+```
+
+### Starter Code
+
+Create the files yourself from this starter. Some pieces are intentionally incomplete.
+
+```hcl
+# versions.tf
+terraform {
+  required_version = ">= 1.6"
+
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 3.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.6"
+    }
+  }
+}
+```
+
+```hcl
+# providers.tf
+provider "azurerm" {
+  features {
+    key_vault {
+      purge_soft_delete_on_destroy    = true
+      recover_soft_deleted_key_vaults = true
+    }
+  }
+}
+```
+
+```hcl
+# variables.tf
+variable "prefix" {
+  description = "Short lowercase prefix used in resource names."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9]{2,10}$", var.prefix))
+    error_message = "Use 3-11 lowercase letters or numbers, starting with a letter."
+  }
+}
+
+variable "location" {
+  description = "Azure region for the lab."
+  type        = string
+  default     = "eastus"
+}
+
+variable "environment" {
+  description = "Environment name."
+  type        = string
+  default     = "dev"
+
+  validation {
+    condition     = contains(["dev", "test"], var.environment)
+    error_message = "Environment must be dev or test for this lab."
+  }
+}
+
+variable "owner" {
+  description = "Owner tag value."
+  type        = string
+}
+
+variable "lab_secret_value" {
+  description = "Low-risk lab secret value. Do not use a real password, token, or production secret."
+  type        = string
+  sensitive   = true
+}
+
+variable "enable_diagnostics" {
+  description = "Whether to create Log Analytics and Key Vault diagnostics."
+  type        = bool
+  default     = true
+}
+```
+
+```hcl
+# terraform.tfvars.example
+prefix           = "tfaz05"
+location         = "eastus"
+environment      = "dev"
+owner            = "your-name"
+lab_secret_value = "example-lab-secret-do-not-use-real-secrets"
+
+enable_diagnostics = true
+```
+
+```hcl
+# main.tf
+data "azurerm_client_config" "current" {}
+
+resource "random_string" "suffix" {
+  length  = 6
+  upper   = false
+  special = false
+}
+
+locals {
+  name_prefix = "${var.prefix}-${var.environment}"
+
+  common_tags = {
+    environment = var.environment
+    owner       = var.owner
+    managed_by  = "terraform"
+    project     = "azure-terraform-hands-on"
+  }
+
+  # TODO: Make these names Azure-valid and globally unique where required.
+  storage_account_name = replace("${var.prefix}${var.environment}${random_string.suffix.result}", "-", "")
+  key_vault_name       = "${var.prefix}-${var.environment}-${random_string.suffix.result}"
+}
+
+resource "azurerm_resource_group" "this" {
+  name     = "${local.name_prefix}-identity-rg"
+  location = var.location
+  tags     = local.common_tags
+}
+
+# TODO: Create a user-assigned managed identity.
+# Requirements:
+# - Name should identify the future app workload.
+# - Tags applied.
+
+# TODO: Create a storage account.
+# Requirements:
+# - Standard performance
+# - Locally redundant storage
+# - HTTPS traffic only
+# - Public blob access disabled
+# - Tags applied
+
+# TODO: Create one private blob container named app-data.
+
+# TODO: Create a Key Vault.
+# Requirements:
+# - Use the current tenant ID from azurerm_client_config.
+# - Use RBAC authorization.
+# - Use a low-cost SKU.
+# - Keep purge protection disabled for the lab unless your subscription policy requires it.
+# - Tags applied.
+
+# TODO: Decide how the Terraform-running identity can create the lab secret.
+# Option A:
+# - Confirm your signed-in user or service principal already has Key Vault data-plane permissions.
+# Option B:
+# - Create a narrowly scoped role assignment for data.azurerm_client_config.current.object_id.
+# Suggested role for this lab:
+# - Key Vault Secrets Officer
+# Suggested scope:
+# - The Key Vault resource ID
+# Note:
+# - You may need to wait for RBAC propagation before the secret can be created.
+
+# TODO: Create a lab secret in Key Vault.
+# Requirements:
+# - Name: app-config
+# - Value from var.lab_secret_value
+# - Do not use a real secret.
+# - Explain in notes.md why this still appears in Terraform state.
+
+# TODO: Assign the managed identity a least-privilege Key Vault role.
+# Suggested role:
+# - Key Vault Secrets User
+# Suggested scope:
+# - The Key Vault resource ID
+
+# TODO: Assign the managed identity a least-privilege storage data role.
+# Suggested role:
+# - Storage Blob Data Reader
+# Suggested scope:
+# - Storage account or container scope; document your choice.
+
+# TODO: Optionally create Log Analytics when enable_diagnostics is true.
+
+# TODO: Optionally create diagnostic settings for Key Vault.
+# Capture at least audit events where supported by your provider/resource combination.
+```
+
+```hcl
+# outputs.tf
+# TODO: Output:
+# - resource group name
+# - managed identity name
+# - managed identity principal ID
+# - Key Vault name
+# - Key Vault ID
+# - storage account name
+# - storage account ID
+# - blob container name
+# - role assignment IDs
+#
+# Do not output secret values.
+```
 
 ### Core Tasks
 
-- Create managed identity.
-- Assign least-privilege roles.
-- Store and reference secrets safely.
-- Debug forbidden access.
-- Compare Key Vault access policy model vs RBAC model conceptually.
-- Explain why secrets in Terraform state are risky.
+1. Before writing resources, create a prediction table in `notes.md`.
+2. Predict which values are known before apply and which are unknown until apply.
+3. Write down the intended RBAC scopes before creating the role assignments.
+4. Implement the resource group and common tags.
+5. Implement the managed identity.
+6. Implement the storage account and private blob container.
+7. Implement Key Vault with RBAC authorization enabled.
+8. Decide how the Terraform-running identity is allowed to create the lab secret.
+9. Add one low-risk lab secret and explain the state risk.
+10. Assign `Key Vault Secrets User` to the managed identity at the narrowest practical scope.
+11. Assign `Storage Blob Data Reader` to the managed identity at the narrowest practical scope.
+12. Add diagnostics for Key Vault if enabled.
+13. Run `terraform plan -out=tfplan` and compare the plan with your prediction table.
+14. Apply the plan.
+15. Validate the identity, Key Vault, storage account, and role assignments with Azure CLI.
+16. Wait for RBAC propagation if role assignments do not appear immediately.
+17. Inspect Terraform state and identify which values would be dangerous in a real project.
+18. Run one troubleshooting exercise.
+19. Destroy the resources and confirm the resource group is gone.
 
-### Services Covered
+### Validation Commands
 
-- Managed identities
-- Azure RBAC
-- Key Vault
-- Storage account roles
-- Diagnostic settings
+```bash
+terraform init
+terraform fmt -check -recursive
+terraform validate
+terraform plan -out=tfplan
+terraform show tfplan
+terraform apply tfplan
+terraform output
+terraform state list
+terraform state show azurerm_user_assigned_identity.<name>
+terraform state show azurerm_key_vault.<name>
+terraform state show azurerm_key_vault_secret.<name>
+az group show --name <resource-group-name>
+az identity show --name <identity-name> --resource-group <resource-group-name>
+az keyvault show --name <key-vault-name> --resource-group <resource-group-name>
+az keyvault secret show --vault-name <key-vault-name> --name app-config
+az storage account show --name <storage-account-name> --resource-group <resource-group-name>
+az storage container show --name app-data --account-name <storage-account-name> --auth-mode login
+az role assignment list --assignee <terraform-runner-object-id> --scope <key-vault-id> --output table
+az role assignment list --assignee <managed-identity-principal-id> --scope <key-vault-id> --output table
+az role assignment list --assignee <managed-identity-principal-id> --scope <storage-scope-id> --output table
+az monitor diagnostic-settings list --resource <key-vault-id>
+terraform destroy
+```
 
-### Generate Later
+If `az keyvault secret show` fails for your own signed-in user, diagnose whether your current user has Key Vault data-plane permissions. Do not solve that by granting broad subscription Owner or Contributor access. Explain the correct minimum role and scope.
 
-Generate in detail after you are comfortable with Terraform dependencies and Azure CLI inspection.
+### Troubleshooting Exercise
+
+Choose at least one break/fix scenario:
+
+- Assign the Key Vault role at the resource group scope, then move it to the Key Vault scope and explain least privilege.
+- Assign `Reader` instead of `Key Vault Secrets User` and explain why management-plane read is not the same as secret read.
+- Disable Key Vault RBAC authorization and observe how the access model changes.
+- Remove the storage data role assignment and explain why control-plane access to the storage account is not enough to read blobs.
+- Change the Key Vault name to an invalid value and identify whether Terraform catches the issue before Azure rejects it.
+- Create the role assignment and immediately test access, then document any RBAC propagation delay.
+
+Record:
+
+```text
+What I broke:
+
+Where it failed: validate / plan / apply / Azure CLI validation
+
+Error or symptom:
+
+Root cause:
+
+Fix:
+
+Production lesson:
+```
+
+### Interview Questions
+
+1. What is a user-assigned managed identity?
+2. How is a user-assigned managed identity different from a system-assigned managed identity?
+3. What is the difference between Azure RBAC and Key Vault access policies?
+4. Why does Key Vault have both management-plane and data-plane permissions?
+5. Why is `Reader` not enough to read Key Vault secrets?
+6. What is an RBAC scope?
+7. Why should role assignments use the narrowest practical scope?
+8. What is RBAC propagation delay, and how would you troubleshoot it?
+9. Why can Terraform state contain secrets even when variables are marked sensitive?
+10. Should Terraform create production secret values? Why or why not?
+11. What does `principal_id` represent for a managed identity?
+12. Why might a role assignment need an explicit dependency?
+13. What storage role allows reading blob data?
+14. How would Lab 6 prove the managed identity can actually read a secret at runtime?
+
+### Decision Note
+
+Write a short note in `notes.md`:
+
+```text
+Identity decision:
+
+Key Vault authorization model:
+
+Key Vault secret handling:
+
+RBAC scopes chosen:
+
+Storage data access decision:
+
+Terraform state risks:
+
+What operators may change manually:
+
+Production changes:
+```
+
+### Cleanup
+
+Run:
+
+```bash
+terraform destroy
+az group show --name <resource-group-name>
+```
+
+If the resource group still exists, list remaining resources:
+
+```bash
+az resource list --resource-group <resource-group-name> --output table
+```
+
+If Key Vault deletion or purge behavior causes cleanup problems, document what happened before taking manual action.
+
+### Grading Rubric
+
+| Area | Strong evidence |
+|---|---|
+| Identity understanding | You can explain managed identity purpose, `principal_id`, and future runtime usage |
+| RBAC correctness | Roles are least-privilege and scoped narrowly |
+| Key Vault model | RBAC authorization is used intentionally and contrasted with access policies |
+| State safety | You can show where secret material appears in state and explain the risk |
+| Terraform modeling | Names are valid, dependencies are clear, outputs avoid secret values |
+| Azure validation | CLI evidence confirms identity, Key Vault, storage, diagnostics, and role assignments |
+| Troubleshooting | You diagnose permission failures without adding broad roles |
+| Cost and cleanup | Resources are low-cost and destroyed after validation |
+| Interview readiness | You can explain control plane vs data plane without reading from notes |
+
+### Hidden Solution Policy
+
+Do not ask for a full solution first. Ask for hints, review, or grading before asking for the complete answer.
 
 ## Project 6 - Application Hosting Project
 
