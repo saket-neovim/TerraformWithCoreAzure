@@ -17,6 +17,10 @@ A collection of Azure infrastructure exercises covering networking, reusable mod
 
 [Curriculum](AzureTerraformHandsOnCurriculum.md) · [Lab workflow and evidence guide](HowToUseAzureTerraformLabs.md) · [Earlier exercise set](Tasks1.md)
 
+## Design case study
+
+[Managed identity and VM hosting](docs/identity-and-hosting-case-study.md) traces Labs 5–6, their ownership and RBAC boundaries, a recorded SKU failure, and the remaining access, bootstrap, and runtime-verification work. It distinguishes configured resources from unfinished application behavior.
+
 ## Design and learning decisions
 
 - Each numbered lab is a separate Terraform root; Lab 4 has separate environment roots and shared modules.
