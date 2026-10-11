@@ -279,11 +279,12 @@ Do not commit or share real secrets.
 Avoid saving:
 
 - `.terraform/`
-- Keep `.terraform.lock.hcl` tracked for reproducible provider selection; it is not a secret artifact.
 - `terraform.tfstate`
 - `terraform.tfstate.backup`
 - `*.tfvars` with real values
 - plan files containing sensitive values
+
+Commit `.terraform.lock.hcl` for reproducible provider selection; it is not a secret artifact.
 
 ## How Grading Works
 
