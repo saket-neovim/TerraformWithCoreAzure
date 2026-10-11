@@ -2250,7 +2250,7 @@ The lab is complete when all required runtime checks pass, the break/fix exercis
 Ask for grading before moving to Lab 7:
 
 ```text
-Grade Project 6 from /Users/saketb/Documents/TerraformWork/06-application-hosting.
+Grade Project 6 from /home/example/Documents/TerraformWork/06-application-hosting.
 ```
 
 ### Hidden Solution Policy

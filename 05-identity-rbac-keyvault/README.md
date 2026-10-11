@@ -2,8 +2,9 @@
 
 Build a small identity and secrets foundation with Terraform.
 
-This lab is intentionally incomplete. Use the TODOs in the Terraform files and your
-notes to implement the missing resources yourself.
+The configuration implements the identity, storage, Key Vault, and RBAC resources.
+TODO comments and notes remain study checkpoints; no committed runtime evidence
+verifies the deployment or break/fix exercises.
 
 ## Architecture Target
 
@@ -36,7 +37,7 @@ Also validate the real Azure resources:
 az group show --name <resource-group-name>
 az identity show --name <identity-name> --resource-group <resource-group-name>
 az keyvault show --name <key-vault-name> --resource-group <resource-group-name>
-az keyvault secret show --vault-name <key-vault-name> --name app-config
+az keyvault secret show --vault-name <key-vault-name> --name app-config --query id -o tsv
 az storage account show --name <storage-account-name> --resource-group <resource-group-name>
 az storage container show --name app-data --account-name <storage-account-name> --auth-mode login
 az role assignment list --assignee <managed-identity-principal-id> --scope <key-vault-id> --output table
