@@ -28,3 +28,20 @@ terraform.rc
 
 .DS_Store
 evidence.md
+
+# Local environment and editor artifacts
+.env
+.env.*
+!.env.example
+*.local
+.DS_Store
+__pycache__/
+*.py[cod]
+
+# Saved plans and local backend coordinates
+tfplan
+*.tfplan
+backend.hcl
+*.backend.hcl
+!*.tfvars.example
+!backend.hcl.example

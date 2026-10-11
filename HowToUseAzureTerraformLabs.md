@@ -23,7 +23,7 @@ The goal is not to memorize Terraform syntax. The goal is to become comfortable 
 Keep each project in its own folder:
 
 ```text
-/Users/saketb/Documents/TerraformWork/
+/home/example/Documents/TerraformWork/
 ├── AzureTerraformHandsOnCurriculum.md
 ├── HowToUseAzureTerraformLabs.md
 ├── 01-starter-stack/
@@ -253,7 +253,7 @@ When you finish a project, do not copy-paste everything into chat.
 Ask:
 
 ```text
-Grade Project 1 from /Users/saketb/Documents/TerraformWork/01-starter-stack.
+Grade Project 1 from /home/example/Documents/TerraformWork/01-starter-stack.
 ```
 
 I can read your `.tf` files, `notes.md`, and `evidence.md` directly.
@@ -279,11 +279,12 @@ Do not commit or share real secrets.
 Avoid saving:
 
 - `.terraform/`
-- `.terraform.lock.hcl` only if you intentionally do not want provider locks tracked
 - `terraform.tfstate`
 - `terraform.tfstate.backup`
 - `*.tfvars` with real values
 - plan files containing sensitive values
+
+Commit `.terraform.lock.hcl` for reproducible provider selection; it is not a secret artifact.
 
 ## How Grading Works
 
