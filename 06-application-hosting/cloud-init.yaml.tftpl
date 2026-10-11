@@ -1,0 +1,15 @@
+#cloud-config
+# TODO: Install python3 and rsyslog; enable the syslog daemon.
+# TODO: Create a dedicated unprivileged service account for the app.
+# TODO: Use write_files to place app_source at /opt/lab06/app.py.
+# TODO: Write a non-secret configuration file containing only:
+# - managed_identity_client_id
+# - key_vault_uri
+# - secret_name
+# TODO: Write a systemd unit that starts the app after network-online.target,
+# runs as the dedicated account, restarts on failure, and sends logs to syslog.
+# TODO: Use runcmd to reload systemd, enable and start the unit.
+# TODO: Emit a user.info syslog marker tagged lab06 after bootstrap completes.
+#
+# Hint: yamlencode() can serialize multiline file content in a Terraform template.
+# Keep tokens, secret values, and private SSH keys out of custom_data.

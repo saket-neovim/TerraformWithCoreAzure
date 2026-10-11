@@ -1,0 +1,19 @@
+prefix              = "tfaz06"
+location            = "eastus"
+environment         = "dev"
+owner               = "your-name"
+vm_size             = "Standard_B1s"
+admin_username      = "azureuser"
+ssh_public_key_path = "~/.ssh/id_ed25519.pub"
+
+# Documentation-only address. Replace with your current public IPv4 /32.
+admin_source_cidr = "203.0.113.10/32"
+
+vnet_address_space  = ["10.60.0.0/16"]
+app_subnet_prefixes = ["10.60.1.0/24"]
+
+# Replace with metadata from your existing Lab 5 resources.
+identity_resource_group_name = "your-lab-05-resource-group"
+managed_identity_name        = "your-lab-05-managed-identity"
+key_vault_name               = "your-lab-05-key-vault"
+secret_name                  = "app-config"

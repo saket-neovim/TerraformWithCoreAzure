@@ -60,11 +60,11 @@ Do not rush through all labs. The goal is work-readiness, not just finishing fil
 | 3 | Terraform state and refactor workflow: remote backend, imports, moved blocks |
 | 4 | Reusable platform modules: foundation, network, naming, tags, validations |
 | 5 | Identity, RBAC, and Key Vault: managed identity, role assignments, secrets |
-| 6 | Application hosting: VM or App Service, diagnostics, private networking |
+| 6 | [Application hosting](06-application-hosting/README.md): Linux VM, SSH tunnel, runtime identity, guest logs |
 | 7 | Private access troubleshooting: private endpoint, private DNS, RBAC/DNS debugging |
 | 8 | CI/CD and capstone: plan review, policy scan, environment promotion, final rebuild |
 
-Projects 1 and 2 are detailed enough to start immediately. Projects 3-8 should be generated or expanded later based on performance in the first two projects.
+Detailed instructions and starter folders are available for Projects 1-6. Projects 7-8 should be generated or expanded later based on performance in the completed projects.
 
 ## Core Azure Areas Covered
 
